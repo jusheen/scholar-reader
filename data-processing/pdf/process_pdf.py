@@ -1,6 +1,11 @@
 import string
 
 import pdf.grobid_client
+from common.models import BoundingBox as BoundingBoxModel
+from common.models import (Citation, CitationPaper, Entity, EntityBoundingBox,
+                           Paper, Summary, output_database)
+from entities.citations.commands.upload_citations import CitationData
+
 
 class PdfStructureParser(object):
     def __init__(self, pdf_hash, structure_map):
@@ -30,22 +35,21 @@ class PdfStructureParser(object):
                     text.append(token['text'])
         return ' '.join(text)
 
-    def union(self, bbox1, bbox2):
+    def union(self, bbox1: BoundingBoxModel, bbox2: BoundingBoxModel):
         if not bbox1:
             return bbox2
-        x1 = min(bbox1[0],bbox2[0])
-        y1 = min(bbox1[1],bbox2[1])
-        x2 = max(bbox1[0]+bbox1[2], bbox2[0]+bbox2[2])
-        y2 = max(bbox1[1]+bbox1[3], bbox2[1]+bbox2[3])
-        return [x1, y1, x2-x1, y2-y1]
+        x1 = min(bbox1.left,bbox2.left)
+        y1 = min(bbox1.top,bbox2.top)
+        x2 = max(bbox1.left+bbox1.width, bbox2.left+bbox2.width)
+        y2 = max(bbox1.top+bbox1.height, bbox2.top+bbox2.height)
+        return BoundingBoxModel(page = bbox1.page,
+                                left = x1, top = y1, width = x2-x1, height=y2-y1)
 
-    def should_combine(self, bbox1, bbox2):
-        page1, bb1 = bbox1
-        page2, bb2 = bbox2
-        return page1 == page2 and (
-            abs(bb1[1] - bb2[1]) < 4 # Same y-coordinate
+    def should_combine(self, bbox1: BoundingBoxModel, bbox2: BoundingBoxModel):
+        return bbox1.page == bbox2.page and (
+            abs(bbox1.top - bbox2.top) < 4 # Same y-coordinate
         ) and (
-            abs(bb2[0] - bb1[0] - bb1[2]) < 15 # To the right
+            abs(bbox2.left - bbox1.left - bbox1.width) < 15 # To the right
         )
 
     def get_bounding_boxes(self, spans):
@@ -55,20 +59,47 @@ class PdfStructureParser(object):
             for i in range(s['left'], s['right']):
                 page, token = self.find_token(i)
                 page_number = page['pageNumber']
-                token_bbox = [token['x'],token['y'],token['width'],token['height']]
+                token_bbox = BoundingBoxModel(
+                    page = page_number,
+                    left = token['x'],
+                    top = token['y'],
+                    width = token['width'],
+                    height=token['height']
+                )
                 if not bbox:
-                    bbox = page_number, token_bbox
-                elif self.should_combine(bbox, (page_number, token_bbox)):
-                    bbox = bbox[0], self.union(bbox[1], token_bbox)
+                    bbox = token_bbox
+                elif self.should_combine(bbox, token_bbox):
+                    bbox = self.union(bbox, token_bbox)
                 else:
                     bboxes.append(bbox)
-                    bbox = page_number, token_bbox
+                    bbox = token_bbox
             bboxes.append(bbox)
         return bboxes
 
 
     def find_cited_paper(self, bib_item_text):
         return 'x'
+
+    def get_symbols(self):
+        for sym in self.elements['<symbol>']:
+            id = sym['tags'].get('id')
+            if id:
+                spans = sym['spans']
+                bbox = self.get_bounding_boxes(spans)
+                print('Symbol', sym, bbox)
+
+    def get_citations(self) -> CitationData:
+        locations = {}
+        s2_ids_of_citations = {}
+        s2_ids = {}
+        return CitationData(
+            arxiv_id = None,
+            s2_id = pdf_hash,
+            citation_locations=locations,
+            key_s2_ids=s2_ids_of_citations,
+            s2_data = s2_ids
+        )
+
 
     def upload(self):
         paper_id = ''
@@ -91,12 +122,7 @@ class PdfStructureParser(object):
             bbox = self.get_bounding_boxes(spans)
             print('Citation', pdf_hash, bbox, cited_paper_id)
 
-        for sym in self.elements['<symbol>']:
-            id = sym['tags'].get('id')
-            if id:
-                spans = sym['spans']
-                bbox = self.get_bounding_boxes(spans)
-                print('Symbol', sym, bbox)
+        self.get_symbols()
 
 
 if __name__ == '__main__':

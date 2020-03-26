@@ -17,8 +17,8 @@ def get_pdf_structure(pdf_file):
             raise Exception("Grobid returned status code {}".format(resp.status_code))
     except requests.exceptions.ConnectionError:
         msg="""Could not connect to local grobid service.
-         To start the service, run 'docker pull 896129387501.dkr.ecr.us-west-2.amazonaws.com/grobid-server:0.5.6-2' 
-         followed by 'docker run --rm -d --name local-grobid -p 8070:8070 -p 8071:8071 896129387501.dkr.ecr.us-west-2.amazonaws.com/grobid-server:0.5.6-2
+         To start the service, run 'docker pull 896129387501.dkr.ecr.us-west-2.amazonaws.com/grobid-server:pdf-structure' 
+         followed by 'docker run --rm -d --name local-grobid -p 8070:8070 -p 8071:8071 896129387501.dkr.ecr.us-west-2.amazonaws.com/grobid-server:pdf-structure
         """
         raise Exception(msg)
 
