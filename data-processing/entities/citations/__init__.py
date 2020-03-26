@@ -1,5 +1,5 @@
 from common import directories
-from common.commands.base import CommandList
+from common.commands.base import CommdirandList
 from common.commands.compile_tex import make_compile_tex_command
 from common.commands.diff_images import make_diff_images_command
 from common.commands.locate_hues import make_locate_hues_command
