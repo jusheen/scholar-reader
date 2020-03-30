@@ -9,7 +9,7 @@ from common.models import BoundingBox as BoundingBoxModel
 from common.models import output_database, Paper, Entity, EntityBoundingBox
 
 
-def upload_symbols(item: SymbolData) -> None:
+def upload_symbols(item: SymbolData, source: str = "tex-pipeline") -> None:
     arxiv_id = item.arxiv_id
     s2_id = item.s2_id
     symbols_with_ids = item.symbols_with_ids
@@ -80,7 +80,7 @@ def upload_symbols(item: SymbolData) -> None:
         box = boxes.get(symbol_id)
         if box is not None:
             entity = Entity(
-                type="symbol", source="tex-pipeline", entity_id=symbol_model.id
+                type="symbol", source=source, entity_id=symbol_model.id
             )
             entities.append(entity)
             bounding_box = BoundingBoxModel(

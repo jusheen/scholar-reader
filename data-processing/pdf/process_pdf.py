@@ -1,6 +1,9 @@
 import requests
 import logging
-from typing import Set, List, Dict
+from typing import List, Dict
+import sys
+from tempfile import TemporaryDirectory
+import subprocess
 
 import pdf.grobid_client
 from common.models import BoundingBox as BoundingBoxModel
@@ -16,6 +19,7 @@ class PdfStructureParser(object):
         self.structure_map = structure_map
         self.pages = structure_map['tokens']['pages']
         self.page_sizes = dict((p['page']['pageNumber'], p['page']) for p in self.pages)
+        self.page_indices = dict((p['page']['pageNumber'], i) for i,p in enumerate(self.pages))
         self.elements = structure_map['elements']['elementTypes']
         self.references = None
 
@@ -118,7 +122,14 @@ class PdfStructureParser(object):
                 symbol_id = SymbolId(id, None, symbol_index)
                 symbols_with_ids.append(SymbolWithId(symbol_id, symbol))
                 if bboxes:
-                    boxes[symbol_id] = bboxes[0]
+                    box = bboxes[0]
+                    page = self.page_sizes[box.page]
+                    box.page = self.page_indices[box.page]
+                    box.left /= page['width']
+                    box.top /= page['height']
+                    box.width /= page['width']
+                    box.height /= page['height']
+                    boxes[symbol_id] = box
                 match = Match(mock_math_ml, mock_math_ml, 1)
                 matches.setdefault(mock_math_ml,[]).append(match)
                 symbol_index += 1
@@ -170,7 +181,7 @@ class PdfStructureParser(object):
                         page = self.page_sizes[box.page]
                         loc = CitationLocation(key=ref,
                                      cluster_index=citation_index,
-                                     page=box.page,
+                                     page=self.page_indices[box.page],
                                      left=box.left / page['width'],
                                      top=box.top / page['height'],
                                      width=box.width / page['width'],
@@ -191,13 +202,21 @@ class PdfStructureParser(object):
 
     def upload(self):
         citations = self.get_citations()
-        #upload_citations(citations, 'pdf-pipeline')
+        upload_citations(citations, 'pdf-pipeline')
         symbols = self.get_symbols()
-        upload_symbols(symbols)
+        upload_symbols(symbols,'pdf-pipeline')
 
 if __name__ == '__main__':
-    pdf_hash = '3febb2bed8865945e7fddc99efd791887bb7e14f'
-    pdf_file='/Users/rodneykinney/data/scholar/grobid/3febb2bed8865945e7fddc99efd791887bb7e14f.pdf'
-    s = pdf.grobid_client.get_pdf_structure(pdf_file)
+    pdf_hashes = ['3febb2bed8865945e7fddc99efd791887bb7e14f']
+    if sys.argv[1:]:
+        pdf_hashes = open(sys.argv[1]).readlines()
+
     init_database_connections('public')
-    PdfStructureParser(pdf_hash, s).upload()
+    with TemporaryDirectory() as tempdir:
+        for pdf_hash in pdf_hashes:
+            pdf_file = "{}/{}.pdf".format(tempdir, pdf_hash)
+            subprocess.check_call([
+                "aws", "s3", "cp", "s3://ai2-s2-pdfs/{}/{}.pdf".format(pdf_hash[:4], pdf_hash[4:]), pdf_file
+            ])
+            s = pdf.grobid_client.get_pdf_structure(pdf_file)
+            PdfStructureParser(pdf_hash, s).upload()
