@@ -4,6 +4,7 @@ from typing import List, Dict
 import sys
 from tempfile import TemporaryDirectory
 import subprocess
+import time
 
 import pdf.grobid_client
 from common.models import BoundingBox as BoundingBoxModel
@@ -214,9 +215,12 @@ if __name__ == '__main__':
     init_database_connections('public')
     with TemporaryDirectory() as tempdir:
         for pdf_hash in pdf_hashes:
+            start_time = time.time()
+            logging.info("Processing PDF %s", pdf_hash)
             pdf_file = "{}/{}.pdf".format(tempdir, pdf_hash)
             subprocess.check_call([
                 "aws", "s3", "cp", "s3://ai2-s2-pdfs/{}/{}.pdf".format(pdf_hash[:4], pdf_hash[4:]), pdf_file
             ])
             s = pdf.grobid_client.get_pdf_structure(pdf_file)
             PdfStructureParser(pdf_hash, s).upload()
+            logging.info("Finished in %s second", time.time() - start_time)
