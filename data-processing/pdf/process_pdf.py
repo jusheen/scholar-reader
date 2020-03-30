@@ -212,7 +212,7 @@ if __name__ == '__main__':
 
     pdf_hashes = ['3febb2bed8865945e7fddc99efd791887bb7e14f']
     if sys.argv[1:]:
-        pdf_hashes = open(sys.argv[1]).readlines()
+        pdf_hashes = [s.strip() for s in open(sys.argv[1]).readlines()]
 
     init_database_connections('public')
     with TemporaryDirectory() as tempdir:
