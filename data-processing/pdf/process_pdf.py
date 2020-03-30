@@ -208,6 +208,8 @@ class PdfStructureParser(object):
         upload_symbols(symbols,'pdf-pipeline')
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+
     pdf_hashes = ['3febb2bed8865945e7fddc99efd791887bb7e14f']
     if sys.argv[1:]:
         pdf_hashes = open(sys.argv[1]).readlines()
@@ -217,10 +219,13 @@ if __name__ == '__main__':
         for pdf_hash in pdf_hashes:
             start_time = time.time()
             logging.info("Processing PDF %s", pdf_hash)
-            pdf_file = "{}/{}.pdf".format(tempdir, pdf_hash)
-            subprocess.check_call([
-                "aws", "s3", "cp", "s3://ai2-s2-pdfs/{}/{}.pdf".format(pdf_hash[:4], pdf_hash[4:]), pdf_file
-            ])
-            s = pdf.grobid_client.get_pdf_structure(pdf_file)
-            PdfStructureParser(pdf_hash, s).upload()
-            logging.info("Finished in %s second", time.time() - start_time)
+            try:
+                pdf_file = "{}/{}.pdf".format(tempdir, pdf_hash)
+                subprocess.check_call([
+                    "aws", "s3", "cp", "s3://ai2-s2-pdfs/{}/{}.pdf".format(pdf_hash[:4], pdf_hash[4:]), pdf_file
+                ])
+                s = pdf.grobid_client.get_pdf_structure(pdf_file)
+                PdfStructureParser(pdf_hash, s).upload()
+                logging.info("Finished in %s second", time.time() - start_time)
+            except Exception:
+                logging.exception('Error processing {}'.format(pdf_hash))
